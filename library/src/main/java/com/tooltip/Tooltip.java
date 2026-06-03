@@ -187,6 +187,10 @@ public final class Tooltip {
         mContentView.setOnClickListener(mClickListener);
         mContentView.setOnLongClickListener(mLongClickListener);
 
+        // Hide until the final position is calculated to avoid a flicker at the
+        // default drop-down location (e.g. overflowing the screen edge) on first show.
+        mContentView.setAlpha(0f);
+
         return mContentView;
     }
 
@@ -352,6 +356,15 @@ public final class Tooltip {
             // instead of being snapped to a screen corner by the WindowManager.
             mPopupWindow.setClippingEnabled(false);
             mPopupWindow.update((int) location.x, (int) location.y, mPopupWindow.getWidth(), mPopupWindow.getHeight());
+
+            // Reveal once the popup has been moved to its final position (after the
+            // update above is applied), so the misplaced first frame is never drawn.
+            mContentView.post(new Runnable() {
+                @Override
+                public void run() {
+                    mContentView.setAlpha(1f);
+                }
+            });
         }
     };
 
