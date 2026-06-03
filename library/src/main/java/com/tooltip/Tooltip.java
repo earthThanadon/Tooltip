@@ -187,10 +187,6 @@ public final class Tooltip {
         mContentView.setOnClickListener(mClickListener);
         mContentView.setOnLongClickListener(mLongClickListener);
 
-        // Hide until the final position is calculated to avoid a flicker at the
-        // default drop-down location (e.g. overflowing the screen edge) on first show.
-        mContentView.setAlpha(0f);
-
         return mContentView;
     }
 
@@ -217,7 +213,14 @@ public final class Tooltip {
                 @Override
                 public void run() {
                     if (mAnchorView.isShown()) {
-                        mPopupWindow.showAsDropDown(mAnchorView);
+                        // Pre-measure the content so the final location can be computed up
+                        // front, then show directly there. This avoids the visible jump from
+                        // the default drop-down position to the corrected one.
+                        mContentView.measure(
+                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                        PointF location = calculateLocation();
+                        mPopupWindow.showAtLocation(mAnchorView, Gravity.NO_GRAVITY, (int) location.x, (int) location.y);
                     } else {
                         Log.e(TAG, "Tooltip cannot be shown, root view is invalid or has been closed");
                     }
@@ -270,8 +273,10 @@ public final class Tooltip {
         final RectF anchorRect = Utils.calculateRectInWindow(mAnchorView);
         final PointF anchorCenter = new PointF(anchorRect.centerX(), anchorRect.centerY());
 
-        final int contentWidth = mContentView.getWidth();
-        final int contentHeight = mContentView.getHeight();
+        // Fall back to the measured size when the view has not been laid out yet
+        // (e.g. when computing the location before the first show).
+        final int contentWidth = mContentView.getWidth() > 0 ? mContentView.getWidth() : mContentView.getMeasuredWidth();
+        final int contentHeight = mContentView.getHeight() > 0 ? mContentView.getHeight() : mContentView.getMeasuredHeight();
 
         // Window bounds in the same coordinate space as anchorRect (getLocationInWindow)
         final View rootView = mAnchorView.getRootView();
@@ -356,15 +361,6 @@ public final class Tooltip {
             // instead of being snapped to a screen corner by the WindowManager.
             mPopupWindow.setClippingEnabled(false);
             mPopupWindow.update((int) location.x, (int) location.y, mPopupWindow.getWidth(), mPopupWindow.getHeight());
-
-            // Reveal once the popup has been moved to its final position (after the
-            // update above is applied), so the misplaced first frame is never drawn.
-            mContentView.post(new Runnable() {
-                @Override
-                public void run() {
-                    mContentView.setAlpha(1f);
-                }
-            });
         }
     };
 
