@@ -266,23 +266,50 @@ public final class Tooltip {
         final RectF anchorRect = Utils.calculateRectInWindow(mAnchorView);
         final PointF anchorCenter = new PointF(anchorRect.centerX(), anchorRect.centerY());
 
-        switch (mGravity) {
+        final int contentWidth = mContentView.getWidth();
+        final int contentHeight = mContentView.getHeight();
+
+        // Window bounds in the same coordinate space as anchorRect (getLocationInWindow)
+        final View rootView = mAnchorView.getRootView();
+        final int windowWidth = rootView.getWidth();
+        final int windowHeight = rootView.getHeight();
+
+        // Auto-flip vertically: the requested side has no room but the opposite side does
+        int gravity = mGravity;
+        if (gravity == Gravity.TOP
+                && anchorRect.top - contentHeight - mMargin < 0
+                && anchorRect.bottom + contentHeight + mMargin <= windowHeight) {
+            gravity = Gravity.BOTTOM;
+        } else if (gravity == Gravity.BOTTOM
+                && anchorRect.bottom + contentHeight + mMargin > windowHeight
+                && anchorRect.top - contentHeight - mMargin >= 0) {
+            gravity = Gravity.TOP;
+        }
+
+        switch (gravity) {
             case Gravity.LEFT:
-                location.x = anchorRect.left - mContentView.getWidth() - mMargin;
-                location.y = anchorCenter.y - mContentView.getHeight() / 2f;
+                location.x = anchorRect.left - contentWidth - mMargin;
+                location.y = anchorCenter.y - contentHeight / 2f;
                 break;
             case Gravity.RIGHT:
                 location.x = anchorRect.right + mMargin;
-                location.y = anchorCenter.y - mContentView.getHeight() / 2f;
+                location.y = anchorCenter.y - contentHeight / 2f;
                 break;
             case Gravity.TOP:
-                location.x = anchorCenter.x - mContentView.getWidth() / 2f;
-                location.y = anchorRect.top - mContentView.getHeight() - mMargin;
+                location.x = anchorCenter.x - contentWidth / 2f;
+                location.y = anchorRect.top - contentHeight - mMargin;
                 break;
             case Gravity.BOTTOM:
-                location.x = anchorCenter.x - mContentView.getWidth() / 2f;
+                location.x = anchorCenter.x - contentWidth / 2f;
                 location.y = anchorRect.bottom + mMargin;
                 break;
+        }
+
+        // Keep the tooltip on screen along the free axis without detaching it from the anchor
+        if (Gravity.isVertical(gravity)) {
+            location.x = Math.max(0, Math.min(location.x, windowWidth - contentWidth));
+        } else {
+            location.y = Math.max(0, Math.min(location.y, windowHeight - contentHeight));
         }
         return location;
     }
@@ -321,7 +348,9 @@ public final class Tooltip {
             }
 
             PointF location = calculateLocation();
-            mPopupWindow.setClippingEnabled(true);
+            // Keep clipping disabled so the popup honors the manually clamped coordinates
+            // instead of being snapped to a screen corner by the WindowManager.
+            mPopupWindow.setClippingEnabled(false);
             mPopupWindow.update((int) location.x, (int) location.y, mPopupWindow.getWidth(), mPopupWindow.getHeight());
         }
     };
